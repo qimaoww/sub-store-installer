@@ -367,9 +367,12 @@ systemctl restart sub-store
 bash -n install_sub_store.sh
 bash tests/test_install_sub_store.sh
 bash tests/integration_install_sub_store.sh
+bash tests/real_source_smoke.sh
 ```
 
 集成测试会启动临时 Docker 容器，在容器内测试安装、更新、配置、服务控制、备份、恢复、WebDAV 和卸载，不会改宿主机的 systemd。默认测试镜像是 `debian:bookworm-slim`，也可以用 `SUB_STORE_TEST_IMAGE=镜像名` 指定本机已有镜像。
+
+真实源码测试会启动临时 Docker 容器，使用真实 `git`、真实 `pnpm` 拉取并构建官方前后端源码，再启动后端 bundle 检查监听和 HTTP 响应。默认测试镜像是 `node:22-bookworm`，也可以用 `SUB_STORE_REAL_TEST_IMAGE=镜像名` 指定。
 
 ## 官方依据
 
