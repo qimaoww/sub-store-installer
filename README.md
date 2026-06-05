@@ -66,6 +66,8 @@ VITE_API_URL=/你的随机后端路径
 bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/main/install_sub_store.sh) uninstall
 ```
 
+卸载时会逐项询问是否删除源码、环境文件、数据目录和备份目录。`--yes` 会确认所有询问项，包括删除数据和备份；生产环境卸载建议先交互执行。
+
 修改配置：
 
 ```bash
@@ -313,7 +315,7 @@ sub-store-local-backup@sub-store.timer
 
 恢复会先创建一份 `pre-restore` 当前状态备份，再覆盖数据目录并尽量恢复环境文件和服务文件。备份包里可能包含敏感配置，请不要公开分享。
 
-使用 `show` 查看配置时，脚本默认隐藏路径前缀、Token、Secret、代理和恢复 URL 等敏感值；需要排障时可加 `--show-secrets` 显示原始环境文件。
+使用 `show` 查看配置时，脚本默认隐藏路径前缀、Token、Secret、代理和恢复 URL 等敏感值；`show` 和 `status` 默认也不会打印 systemd 最近日志，避免日志里带出后端路径。需要排障时可加 `--show-secrets` 显示原始环境文件和完整 systemd 状态。
 
 Sub-Store 官方 Gist 备份由前端设置中的 GitHub Token 驱动。脚本默认只写入后端定时任务：
 

@@ -56,6 +56,14 @@ SKIP_DEPS=0
 START_SERVICE=1
 SHOW_SECRETS=0
 ACTION=""
+ORIGINAL_SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+case "$ORIGINAL_SCRIPT_PATH" in
+  /*)
+    ;;
+  *)
+    ORIGINAL_SCRIPT_PATH="$(pwd)/${ORIGINAL_SCRIPT_PATH}"
+    ;;
+esac
 
 declare -a EXTRA_ENV_PAIRS=()
 declare -A CLI_OVERRIDES=()
@@ -1234,6 +1242,34 @@ print_env_file_redacted() {
   done < "$file"
 }
 
+print_systemd_unit_status() {
+  local unit="$1"
+  local load_state active_state sub_state unit_file_state main_pid fragment_path
+
+  if [[ "$SHOW_SECRETS" -eq 1 ]]; then
+    warn "已按 --show-secrets 显示完整 systemd 状态；最近日志可能包含后端路径前缀，请不要公开分享"
+    systemctl --no-pager --full status "$unit" || true
+    return
+  fi
+
+  warn "默认隐藏 systemd 最近日志，避免暴露后端路径；排障时可加 --show-secrets 查看完整状态"
+  load_state="$(systemctl show "$unit" -p LoadState --value 2>/dev/null || true)"
+  active_state="$(systemctl show "$unit" -p ActiveState --value 2>/dev/null || true)"
+  sub_state="$(systemctl show "$unit" -p SubState --value 2>/dev/null || true)"
+  unit_file_state="$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  main_pid="$(systemctl show "$unit" -p MainPID --value 2>/dev/null || true)"
+  fragment_path="$(systemctl show "$unit" -p FragmentPath --value 2>/dev/null || true)"
+
+  cat <<EOF
+单元名称：${unit}
+加载状态：${load_state:-未知}
+运行状态：${active_state:-未知}$([[ -n "$sub_state" ]] && printf ' (%s)' "$sub_state")
+开机自启：${unit_file_state:-未知}
+主进程 PID：${main_pid:-未知}
+服务文件：${fragment_path:-未知}
+EOF
+}
+
 load_existing_config() {
   local env_file
   env_file="$(env_file_path)"
@@ -1339,13 +1375,24 @@ write_environment_file() {
 }
 
 write_systemd_service() {
-  local service_file env_file
+  local service_file env_file private_tmp_line
   local backend_dir="${INSTALL_DIR}/Sub-Store/backend"
   local bundle="${backend_dir}/dist/sub-store.bundle.js"
   service_file="$(service_file_path)"
   env_file="$(env_file_path)"
   NODE_BIN="${NODE_BIN:-$(resolve_node_bin || true)}"
   [[ -n "$NODE_BIN" ]] || die "写入 systemd 服务前未找到可用 Node.js"
+  private_tmp_line="PrivateTmp=true"
+  case "$backend_dir" in
+    /tmp/*|/var/tmp/*)
+      private_tmp_line=""
+      ;;
+  esac
+  case "$DATA_DIR" in
+    /tmp/*|/var/tmp/*)
+      private_tmp_line=""
+      ;;
+  esac
 
   cat > "$service_file" <<EOF
 [Unit]
@@ -1364,7 +1411,7 @@ ExecStart=${NODE_BIN} ${bundle}
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
-PrivateTmp=true
+${private_tmp_line}
 
 [Install]
 WantedBy=multi-user.target
@@ -1379,8 +1426,9 @@ local_backup_enabled() {
 }
 
 write_installer_copy() {
-  local source="${BASH_SOURCE[0]}"
+  local source="$ORIGINAL_SCRIPT_PATH"
 
+  [[ -r "$source" ]] || source="${BASH_SOURCE[0]}"
   [[ -r "$source" ]] || source="$0"
   [[ -r "$source" ]] || {
     warn "无法复制当前安装脚本到 ${INSTALLER_BIN}，本地自动备份 timer 将不会启用"
@@ -1738,6 +1786,7 @@ prepare_directories() {
 }
 
 fix_permissions() {
+  chmod 0755 "$INSTALL_DIR"
   chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR"
   chown -R "$SERVICE_USER:$SERVICE_USER" "${INSTALL_DIR}/Sub-Store" "${INSTALL_DIR}/Sub-Store-Front-End"
 }
@@ -1748,7 +1797,8 @@ start_or_reload_service() {
   if [[ "$START_SERVICE" -eq 1 ]]; then
     systemctl enable --now "${SERVICE_NAME}.service"
     systemctl restart "${SERVICE_NAME}.service"
-    systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+    section "Sub-Store 服务状态"
+    print_systemd_unit_status "${SERVICE_NAME}.service"
   else
     warn "已使用 --no-start，因此没有启用或启动 systemd 服务"
   fi
@@ -2058,7 +2108,7 @@ show_config_action() {
   apply_cli_overrides
 
   section "当前服务状态"
-  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+  print_systemd_unit_status "${SERVICE_NAME}.service"
 
   section "当前环境配置"
   if [[ -f "$env_file" ]]; then
@@ -2081,12 +2131,12 @@ WebDAV 远程目录：${WEBDAV_PATH}
 EOF
 
   section "本地自动备份 timer"
-  systemctl --no-pager --full status "$(backup_timer_unit_name)" || true
+  print_systemd_unit_status "$(backup_timer_unit_name)"
 }
 
 status_action() {
   section "Sub-Store 服务状态"
-  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+  print_systemd_unit_status "${SERVICE_NAME}.service"
 }
 
 start_action() {
