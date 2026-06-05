@@ -130,6 +130,21 @@ bash -c '
 set -euo pipefail
 source <(sed "$ d" "$1")
 
+ASSUME_YES=1
+INTERACTIVE=0
+confirm "测试确认" "n" || exit 20
+
+ASSUME_YES=0
+INTERACTIVE=0
+if confirm "测试确认" "n"; then
+  exit 21
+fi
+' bash "$SCRIPT" || fail "--yes 非交互确认逻辑验证失败"
+
+bash -c '
+set -euo pipefail
+source <(sed "$ d" "$1")
+
 FRONTEND_BACKEND_PATH=""
 API_URL=""
 normalize_config
@@ -143,7 +158,7 @@ apply_api_url_input "/my-custom-path"
 [[ "$API_URL" == "/my-custom-path" ]] || exit 13
 ' bash "$SCRIPT" || fail "随机后端路径或自定义后端路径逻辑验证失败"
 
-for file in "$SCRIPT" "$README"; do
+while IFS= read -r file; do
   while IFS= read -r line; do
     if [[ "$line" =~ /[A-Za-z0-9_-]{8,}\^ ]]; then
       fail "疑似真实随机后端路径被写入仓库文件：$file"
@@ -155,6 +170,6 @@ for file in "$SCRIPT" "$README"; do
       fi
     fi
   done < "$file"
-done
+done < <(find "$ROOT_DIR" -type f \( -name '*.sh' -o -name 'README.md' \) | sort)
 
 printf '安装脚本静态检查通过\n'

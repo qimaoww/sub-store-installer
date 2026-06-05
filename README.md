@@ -366,7 +366,10 @@ systemctl restart sub-store
 ```bash
 bash -n install_sub_store.sh
 bash tests/test_install_sub_store.sh
+bash tests/integration_install_sub_store.sh
 ```
+
+集成测试会启动临时 Docker 容器，在容器内测试安装、更新、配置、服务控制、备份、恢复、WebDAV 和卸载，不会改宿主机的 systemd。默认测试镜像是 `debian:bookworm-slim`，也可以用 `SUB_STORE_TEST_IMAGE=镜像名` 指定本机已有镜像。
 
 ## 官方依据
 

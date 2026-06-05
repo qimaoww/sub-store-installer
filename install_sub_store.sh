@@ -211,7 +211,11 @@ confirm() {
   local default="${2:-n}"
   local answer
 
-  if [[ "$ASSUME_YES" -eq 1 || "$INTERACTIVE" -eq 0 ]]; then
+  if [[ "$ASSUME_YES" -eq 1 ]]; then
+    return 0
+  fi
+
+  if [[ "$INTERACTIVE" -eq 0 ]]; then
     [[ "$default" =~ ^[Yy]$ ]]
     return
   fi
