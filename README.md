@@ -16,7 +16,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/
 
 - 安装与更新：安装 Sub-Store、更新已安装版本
 - 配置与查看：修改配置、查看配置
-- 备份与恢复：立即备份、恢复、查看备份、清理备份、测试 WebDAV
+- 备份与恢复：立即备份、修改备份配置、恢复、查看备份、清理备份、测试 WebDAV
 - 服务控制：状态、启动、重启、停止、关闭
 - 卸载 Sub-Store
 
@@ -73,6 +73,14 @@ bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/main/install_sub_store.sh) config
 ```
+
+只修改备份配置：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/main/install_sub_store.sh) backup-config
+```
+
+这个入口只会询问本地自动备份、WebDAV 远程备份、官方 Gist 备份 cron，不会询问监听地址、端口、后端路径，也不会重建前端。
 
 更新已安装实例：
 
@@ -188,7 +196,7 @@ sudo bash install_sub_store.sh backup
 启用 WebDAV 远程备份：
 
 ```bash
-sudo bash install_sub_store.sh config \
+sudo bash install_sub_store.sh backup-config \
   --webdav-url https://example.com/dav \
   --webdav-user your-user \
   --webdav-password your-app-password \
@@ -246,6 +254,7 @@ bash install_sub_store.sh cleanup-backups
 bash install_sub_store.sh webdav-test
 bash install_sub_store.sh uninstall
 bash install_sub_store.sh config
+bash install_sub_store.sh backup-config
 bash install_sub_store.sh show
 bash install_sub_store.sh status
 bash install_sub_store.sh start

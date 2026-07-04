@@ -95,6 +95,7 @@ usage() {
   install / 安装            全新安装 Sub-Store
   update / 更新             更新已安装的 Sub-Store，保留配置和数据
   backup / 备份             立即创建本地数据备份
+  backup-config / 备份配置   只修改自动备份、WebDAV 和官方备份 cron
   restore / 恢复            从本地备份恢复数据和配置
   list-backups / 查看备份   查看本地备份列表
   cleanup-backups / 清理备份 清理旧备份，只保留指定数量
@@ -162,6 +163,7 @@ Sub-Store 官方运行选项：
   bash install_sub_store.sh
   bash install_sub_store.sh install --listen 0.0.0.0 --port 3000 --api-url /my-secret-path
   bash install_sub_store.sh update
+  bash install_sub_store.sh backup-config
   bash install_sub_store.sh backup
   bash install_sub_store.sh webdav-test
   bash install_sub_store.sh restore --backup-file /opt/sub-store/backups/sub-store-manual-20260605-120000.tar.gz
@@ -170,6 +172,7 @@ Sub-Store 官方运行选项：
   bash install_sub_store.sh --no-backup --env SUB_STORE_MAX_HEADER_SIZE=65536
   bash install_sub_store.sh uninstall
   bash install_sub_store.sh config
+  bash install_sub_store.sh backup-config
   bash install_sub_store.sh show
   bash install_sub_store.sh status
   bash install_sub_store.sh start
@@ -306,12 +309,15 @@ choose_config_menu() {
       修改监听、路径、备份等配置，并按需重建前端
   [2] 查看配置
       默认隐藏后端路径、Token、密码等敏感值
+  [3] 只修改备份配置
+      不询问监听地址、端口、后端路径
   [0] 返回主菜单
 EOF
   read_interactive "请选择 [1]: " choice
   case "${choice:-1}" in
     1) ACTION="config" ;;
     2) ACTION="show" ;;
+    3) ACTION="backup-config" ;;
     0) return 1 ;;
     *) die "无效选择：${choice}" ;;
   esac
@@ -329,6 +335,8 @@ choose_backup_menu() {
   [3] 查看本地备份
   [4] 清理旧备份
   [5] 测试 WebDAV 远程备份
+  [6] 修改备份配置
+      只修改本地自动备份、WebDAV、官方备份 cron
   [0] 返回主菜单
 EOF
   read_interactive "请选择 [1]: " choice
@@ -338,6 +346,7 @@ EOF
     3) ACTION="list-backups" ;;
     4) ACTION="cleanup-backups" ;;
     5) ACTION="webdav-test" ;;
+    6) ACTION="backup-config" ;;
     0) return 1 ;;
     *) die "无效选择：${choice}" ;;
   esac
@@ -414,6 +423,10 @@ parse_args() {
         ;;
       backup|备份)
         ACTION="backup"
+        shift
+        ;;
+      backup-config|backup-configure|备份配置|自动备份配置)
+        ACTION="backup-config"
         shift
         ;;
       restore|恢复)
@@ -948,8 +961,6 @@ apply_api_url_input() {
 }
 
 collect_interactive_config() {
-  local webdav_default
-
   [[ "$INTERACTIVE" -eq 1 ]] || return 0
 
   section "第 1 步：基础访问配置"
@@ -968,7 +979,31 @@ collect_interactive_config() {
   INSTALL_DIR="$(prompt_default "安装目录" "$INSTALL_DIR")"
   DATA_DIR="$(prompt_default "数据目录 SUB_STORE_DATA_BASE_PATH" "$DATA_DIR")"
 
-  section "第 2 步：脚本本地备份配置"
+  collect_interactive_backup_config \
+    "第 2 步：脚本本地备份配置" \
+    "第 3 步：WebDAV 远程备份配置" \
+    "第 4 步：官方备份配置"
+
+  section "第 5 步：高级官方配置"
+  if confirm "进入其他官方高级配置？" "n"; then
+    BACKEND_SYNC_CRON="$(prompt_default "订阅同步 cron SUB_STORE_BACKEND_SYNC_CRON（空为关闭）" "$BACKEND_SYNC_CRON")"
+    PRODUCE_CRON="$(prompt_default "产物生成 cron SUB_STORE_PRODUCE_CRON（空为关闭）" "$PRODUCE_CRON")"
+    DATA_URL="$(prompt_default "启动时恢复数据 URL SUB_STORE_DATA_URL（空为关闭）" "$DATA_URL")"
+    DATA_URL_POST="$(prompt_default "恢复后处理脚本 SUB_STORE_DATA_URL_POST（空为关闭）" "$DATA_URL_POST")"
+    BACKEND_DEFAULT_PROXY="$(prompt_default "默认代理 SUB_STORE_BACKEND_DEFAULT_PROXY（空为关闭）" "$BACKEND_DEFAULT_PROXY")"
+    PUSH_SERVICE="$(prompt_default "推送服务 SUB_STORE_PUSH_SERVICE（空为关闭）" "$PUSH_SERVICE")"
+  fi
+}
+
+collect_interactive_backup_config() {
+  local webdav_default
+  local local_title="${1:-备份配置：脚本本地备份}"
+  local webdav_title="${2:-备份配置：WebDAV 远程备份}"
+  local official_title="${3:-备份配置：官方 Gist 备份}"
+
+  [[ "$INTERACTIVE" -eq 1 ]] || return 0
+
+  section "$local_title"
   if confirm "启用脚本本地自动备份？会把数据和配置打包到本机" "y"; then
     LOCAL_BACKUP_DIR="$(prompt_default "本地备份目录 SUB_STORE_LOCAL_BACKUP_DIR" "$LOCAL_BACKUP_DIR")"
     LOCAL_BACKUP_KEEP="$(prompt_default "本地备份保留数量 SUB_STORE_LOCAL_BACKUP_KEEP" "$LOCAL_BACKUP_KEEP")"
@@ -977,7 +1012,7 @@ collect_interactive_config() {
     LOCAL_BACKUP_CRON="off"
   fi
 
-  section "第 3 步：WebDAV 远程备份配置"
+  section "$webdav_title"
   webdav_default="n"
   [[ -n "$WEBDAV_URL" ]] && webdav_default="y"
   if confirm "启用 WebDAV 远程备份？本地备份成功后自动上传 tar.gz" "$webdav_default"; then
@@ -992,7 +1027,7 @@ collect_interactive_config() {
     WEBDAV_PASSWORD=""
   fi
 
-  section "第 4 步：官方备份配置"
+  section "$official_title"
   if confirm "启用官方 Gist 自动上传备份 cron？需要先在前端设置 GitHub Token" "y"; then
     BACKUP_UPLOAD_CRON="$(prompt_default "上传备份 cron SUB_STORE_BACKEND_UPLOAD_CRON" "$BACKUP_UPLOAD_CRON")"
   else
@@ -1001,16 +1036,6 @@ collect_interactive_config() {
 
   if confirm "配置官方 Gist 自动下载恢复 cron？它会用远端备份覆盖本地数据" "n"; then
     BACKUP_DOWNLOAD_CRON="$(prompt_default "下载恢复 cron SUB_STORE_BACKEND_DOWNLOAD_CRON" "0 4 * * *")"
-  fi
-
-  section "第 5 步：高级官方配置"
-  if confirm "进入其他官方高级配置？" "n"; then
-    BACKEND_SYNC_CRON="$(prompt_default "订阅同步 cron SUB_STORE_BACKEND_SYNC_CRON（空为关闭）" "$BACKEND_SYNC_CRON")"
-    PRODUCE_CRON="$(prompt_default "产物生成 cron SUB_STORE_PRODUCE_CRON（空为关闭）" "$PRODUCE_CRON")"
-    DATA_URL="$(prompt_default "启动时恢复数据 URL SUB_STORE_DATA_URL（空为关闭）" "$DATA_URL")"
-    DATA_URL_POST="$(prompt_default "恢复后处理脚本 SUB_STORE_DATA_URL_POST（空为关闭）" "$DATA_URL_POST")"
-    BACKEND_DEFAULT_PROXY="$(prompt_default "默认代理 SUB_STORE_BACKEND_DEFAULT_PROXY（空为关闭）" "$BACKEND_DEFAULT_PROXY")"
-    PUSH_SERVICE="$(prompt_default "推送服务 SUB_STORE_PUSH_SERVICE（空为关闭）" "$PUSH_SERVICE")"
   fi
 }
 
@@ -2035,6 +2060,54 @@ EOF
   log "配置已更新，服务已重启"
 }
 
+backup_config_action() {
+  local env_file
+  env_file="$(env_file_path)"
+
+  [[ -f "$env_file" ]] || die "未找到环境文件：${env_file}；请先执行安装"
+
+  load_existing_config
+  apply_cli_overrides
+  section "只修改备份配置"
+  collect_interactive_backup_config \
+    "第 1 步：脚本本地备份配置" \
+    "第 2 步：WebDAV 远程备份配置" \
+    "第 3 步：官方备份配置"
+  normalize_config
+
+  section "备份配置修改计划"
+  cat <<EOF
+将写入环境文件：${env_file}
+服务名称：${SERVICE_NAME}.service
+监听地址保持不变：${LISTEN_HOST}:${BACKEND_PORT}
+后端路径保持不变：${FRONTEND_BACKEND_PATH}
+本地备份目录：${LOCAL_BACKUP_DIR}
+本地备份保留：${LOCAL_BACKUP_KEEP}
+本地自动备份：${LOCAL_BACKUP_CRON:-已关闭}
+WebDAV 远程备份：$([[ -n "$WEBDAV_URL" ]] && printf '已配置' || printf '已关闭')
+官方上传 cron：${BACKUP_UPLOAD_CRON:-已关闭}
+官方下载 cron：${BACKUP_DOWNLOAD_CRON:-已关闭}
+EOF
+
+  confirm "确认写入备份配置？" "y" || die "已取消修改备份配置"
+
+  ensure_user
+  mkdir -p "$CONFIG_DIR"
+  if local_backup_enabled; then
+    mkdir -p "$LOCAL_BACKUP_DIR"
+    chmod 0700 "$LOCAL_BACKUP_DIR"
+  fi
+  write_environment_file
+  write_backup_timer
+  systemctl daemon-reload
+  if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+    systemctl try-restart "${SERVICE_NAME}.service" || warn "服务重启失败，请运行 status 查看原因"
+  else
+    warn "服务当前未运行，已写入配置；下次启动时生效"
+  fi
+  log "备份配置已更新"
+}
+
 backup_action() {
   load_existing_config
   apply_cli_overrides
@@ -2204,6 +2277,9 @@ main() {
       ;;
     config)
       modify_config_action
+      ;;
+    backup-config)
+      backup_config_action
       ;;
     show)
       show_config_action
