@@ -136,7 +136,7 @@ Sub-Store 官方运行选项：
 本地备份选项：
   --backup-dir DIR              本地备份目录。默认：/opt/sub-store/backups
   --backup-keep N               自动清理时保留最近 N 份备份。默认：7
-  --local-backup-cron VALUE     本地自动备份时间，使用 systemd OnCalendar。默认：daily
+  --local-backup-cron VALUE     本地自动备份时间，使用 systemd OnCalendar。默认：daily；可填 off 关闭
   --no-local-backup             关闭脚本本地自动备份 timer
   --backup-file FILE            恢复时指定备份文件
   --no-update-backup            更新已安装版本前不自动备份
@@ -1007,7 +1007,7 @@ collect_interactive_backup_config() {
   if confirm "启用脚本本地自动备份？会把数据和配置打包到本机" "y"; then
     LOCAL_BACKUP_DIR="$(prompt_default "本地备份目录 SUB_STORE_LOCAL_BACKUP_DIR" "$LOCAL_BACKUP_DIR")"
     LOCAL_BACKUP_KEEP="$(prompt_default "本地备份保留数量 SUB_STORE_LOCAL_BACKUP_KEEP" "$LOCAL_BACKUP_KEEP")"
-    LOCAL_BACKUP_CRON="$(prompt_default "本地自动备份时间 SUB_STORE_LOCAL_BACKUP_CRON（systemd OnCalendar）" "$LOCAL_BACKUP_CRON")"
+    LOCAL_BACKUP_CRON="$(prompt_default "本地自动备份时间 SUB_STORE_LOCAL_BACKUP_CRON（daily/hourly/off 或 systemd OnCalendar）" "$LOCAL_BACKUP_CRON")"
   else
     LOCAL_BACKUP_CRON="off"
   fi
@@ -1049,6 +1049,42 @@ normalize_webdav_path() {
   printf '%s' "$path"
 }
 
+trim_value() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+normalize_local_backup_cron() {
+  local value lower
+  value="$(trim_value "$1")"
+  lower="${value,,}"
+
+  case "$lower" in
+    ""|on|yes|y|true|1|enable|enabled|启用|开启)
+      printf 'daily'
+      ;;
+    off|no|n|false|0|disable|disabled|禁用|关闭)
+      printf 'off'
+      ;;
+    *)
+      printf '%s' "$value"
+      ;;
+  esac
+}
+
+validate_local_backup_cron() {
+  local result
+
+  local_backup_enabled || return 0
+  command -v systemd-analyze >/dev/null 2>&1 || return 0
+
+  if ! result="$(systemd-analyze calendar "$LOCAL_BACKUP_CRON" 2>&1)"; then
+    die "本地自动备份时间无效：${LOCAL_BACKUP_CRON}。请填写 daily、hourly、*-*-* 04:00:00 这类 systemd OnCalendar，或填写 off 关闭"
+  fi
+}
+
 normalize_config() {
   [[ "$BACKEND_PORT" =~ ^[0-9]+$ ]] || die "--port 必须是数字"
   (( BACKEND_PORT >= 1 && BACKEND_PORT <= 65535 )) || die "--port 必须在 1 到 65535 之间"
@@ -1071,6 +1107,8 @@ normalize_config() {
   CONFIG_DIR="${CONFIG_DIR%/}"
   LOCAL_BACKUP_DIR="${LOCAL_BACKUP_DIR%/}"
   [[ -n "$LOCAL_BACKUP_DIR" ]] || LOCAL_BACKUP_DIR="${INSTALL_DIR}/backups"
+  LOCAL_BACKUP_CRON="$(normalize_local_backup_cron "$LOCAL_BACKUP_CRON")"
+  validate_local_backup_cron
   WEBDAV_URL="${WEBDAV_URL%/}"
   WEBDAV_PATH="$(normalize_webdav_path "$WEBDAV_PATH")"
 }

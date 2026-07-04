@@ -82,6 +82,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/qimaoww/sub-store-installer/
 
 这个入口只会询问本地自动备份、WebDAV 远程备份、官方 Gist 备份 cron，不会询问监听地址、端口、后端路径，也不会重建前端。
 
+本地自动备份时间使用 systemd `OnCalendar` 格式，例如 `daily`、`hourly`、`*-*-* 04:00:00`；填写 `off` 关闭。为了兼容误填，`on`、`yes`、`true` 会按 `daily` 处理。
+
 更新已安装实例：
 
 ```bash
@@ -276,7 +278,7 @@ bash install_sub_store.sh disable
 
 - `--backup-dir DIR`：本地备份目录，默认 `/opt/sub-store/backups`
 - `--backup-keep N`：保留最近 N 份本地备份，默认 `7`
-- `--local-backup-cron VALUE`：systemd `OnCalendar` 时间，默认 `daily`
+- `--local-backup-cron VALUE`：systemd `OnCalendar` 时间，默认 `daily`；填 `off` 关闭，误填 `on/yes/true` 会按 `daily` 处理
 - `--no-local-backup`：关闭脚本本地自动备份 timer
 - `--backup-file FILE`：恢复时指定备份文件
 - `--no-update-backup`：更新已安装实例前不自动创建备份

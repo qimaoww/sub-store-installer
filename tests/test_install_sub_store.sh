@@ -79,6 +79,8 @@ assert_contains "list_backups_action"
 assert_contains "cleanup_backups_action"
 assert_contains "webdav_test_action"
 assert_contains "collect_interactive_backup_config"
+assert_contains "normalize_local_backup_cron"
+assert_contains "validate_local_backup_cron"
 assert_contains "只修改备份配置"
 assert_contains "backup-config"
 assert_contains "备份配置已更新"
@@ -137,6 +139,7 @@ assert_readme_contains "bash <(curl -fsSL https://raw.githubusercontent.com/qima
 assert_readme_contains "不会写入 README 或测试文件"
 assert_readme_contains "WebDAV 远程备份"
 assert_readme_contains "backup-config"
+assert_readme_contains '误填 `on/yes/true` 会按 `daily` 处理'
 
 backup_config_body="$(sed -n '/^backup_config_action()/,/^backup_action()/p' "$SCRIPT")"
 [[ "$backup_config_body" != *"collect_interactive_config"* ]] || fail "backup-config 不应进入完整基础配置流程"
@@ -173,6 +176,31 @@ apply_api_url_input "/my-custom-path"
 [[ "$FRONTEND_BACKEND_PATH" == "/my-custom-path" ]] || exit 12
 [[ "$API_URL" == "/my-custom-path" ]] || exit 13
 ' bash "$SCRIPT" || fail "随机后端路径或自定义后端路径逻辑验证失败"
+
+bash -c '
+set -euo pipefail
+source <(sed "$ d" "$1")
+
+LOCAL_BACKUP_CRON="on"
+normalize_config
+[[ "$LOCAL_BACKUP_CRON" == "daily" ]] || exit 20
+
+LOCAL_BACKUP_CRON="yes"
+normalize_config
+[[ "$LOCAL_BACKUP_CRON" == "daily" ]] || exit 21
+
+LOCAL_BACKUP_CRON="off"
+normalize_config
+[[ "$LOCAL_BACKUP_CRON" == "off" ]] || exit 22
+
+LOCAL_BACKUP_CRON="no"
+normalize_config
+[[ "$LOCAL_BACKUP_CRON" == "off" ]] || exit 23
+
+LOCAL_BACKUP_CRON="hourly"
+normalize_config
+[[ "$LOCAL_BACKUP_CRON" == "hourly" ]] || exit 24
+' bash "$SCRIPT" || fail "本地自动备份 OnCalendar 开关兼容逻辑验证失败"
 
 while IFS= read -r file; do
   while IFS= read -r line; do
