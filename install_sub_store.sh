@@ -203,6 +203,16 @@ section() {
   printf '\n\033[1;36m==> %s\033[0m\n' "$*"
 }
 
+menu_option() {
+  local number="$1"
+  local title="$2"
+  printf '  \033[1m[%s] %s\033[0m\n' "$number" "$title"
+}
+
+menu_note() {
+  printf '      \033[2m说明：%s\033[0m\n' "$*"
+}
+
 read_interactive() {
   local prompt="$1"
   local __var_name="$2"
@@ -284,13 +294,11 @@ choose_install_menu() {
   local choice
 
   section "安装与更新"
-  cat <<'EOF'
-  [1] 安装 Sub-Store
-      全新源码部署，写入环境文件和 systemd 服务
-  [2] 更新已安装版本
-      保留配置和数据，更新源码并重新构建
-  [0] 返回主菜单
-EOF
+  menu_option 1 "安装 Sub-Store"
+  menu_note "全新源码部署，写入环境文件和 systemd 服务"
+  menu_option 2 "更新已安装版本"
+  menu_note "保留配置和数据，更新源码并重新构建"
+  menu_option 0 "返回主菜单"
   read_interactive "请选择 [1]: " choice
   case "${choice:-1}" in
     1) ACTION="install" ;;
@@ -304,15 +312,13 @@ choose_config_menu() {
   local choice
 
   section "配置与查看"
-  cat <<'EOF'
-  [1] 修改配置
-      修改监听、路径、备份等配置，并按需重建前端
-  [2] 查看配置
-      默认隐藏后端路径、Token、密码等敏感值
-  [3] 只修改备份配置
-      不询问监听地址、端口、后端路径
-  [0] 返回主菜单
-EOF
+  menu_option 1 "修改配置"
+  menu_note "修改监听、路径、备份等配置，并按需重建前端"
+  menu_option 2 "查看配置"
+  menu_note "默认隐藏后端路径、Token、密码等敏感值"
+  menu_option 3 "只修改备份配置"
+  menu_note "不询问监听地址、端口、后端路径"
+  menu_option 0 "返回主菜单"
   read_interactive "请选择 [1]: " choice
   case "${choice:-1}" in
     1) ACTION="config" ;;
@@ -327,18 +333,16 @@ choose_backup_menu() {
   local choice
 
   section "备份与恢复"
-  cat <<'EOF'
-  [1] 立即备份
-      创建本地 tar.gz；已配置 WebDAV 时会同步上传
-  [2] 从本地备份恢复
-      恢复前会先创建 pre-restore 当前状态备份
-  [3] 查看本地备份
-  [4] 清理旧备份
-  [5] 测试 WebDAV 远程备份
-  [6] 修改备份配置
-      只修改本地自动备份、WebDAV、官方备份 cron
-  [0] 返回主菜单
-EOF
+  menu_option 1 "立即备份"
+  menu_note "创建本地 tar.gz；已配置 WebDAV 时会同步上传"
+  menu_option 2 "从本地备份恢复"
+  menu_note "恢复前会先创建 pre-restore 当前状态备份"
+  menu_option 3 "查看本地备份"
+  menu_option 4 "清理旧备份"
+  menu_option 5 "测试 WebDAV 远程备份"
+  menu_option 6 "修改备份配置"
+  menu_note "只修改本地自动备份、WebDAV、官方备份 cron"
+  menu_option 0 "返回主菜单"
   read_interactive "请选择 [1]: " choice
   case "${choice:-1}" in
     1) ACTION="backup" ;;
@@ -356,14 +360,12 @@ choose_service_menu() {
   local choice
 
   section "服务控制"
-  cat <<'EOF'
-  [1] 显示状态
-  [2] 启动服务
-  [3] 重启服务
-  [4] 停止服务
-  [5] 关闭服务（停止并禁用开机自启）
-  [0] 返回主菜单
-EOF
+  menu_option 1 "显示状态"
+  menu_option 2 "启动服务"
+  menu_option 3 "重启服务"
+  menu_option 4 "停止服务"
+  menu_option 5 "关闭服务（停止并禁用开机自启）"
+  menu_option 0 "返回主菜单"
   read_interactive "请选择 [1]: " choice
   case "${choice:-1}" in
     1) ACTION="status" ;;
@@ -388,14 +390,12 @@ choose_action() {
 
   while true; do
     section "选择要执行的操作"
-    cat <<'EOF'
-  [1] 安装与更新
-  [2] 配置与查看
-  [3] 备份与恢复
-  [4] 服务控制
-  [5] 卸载 Sub-Store
-  [0] 退出
-EOF
+    menu_option 1 "安装与更新"
+    menu_option 2 "配置与查看"
+    menu_option 3 "备份与恢复"
+    menu_option 4 "服务控制"
+    menu_option 5 "卸载 Sub-Store"
+    menu_option 0 "退出"
 
     read_interactive "请选择 [1]: " choice
     case "${choice:-1}" in

@@ -54,6 +54,9 @@ assert_contains "相对路径"
 assert_contains "不能为 /"
 assert_contains "选择要执行的操作"
 assert_contains '[[ -z "$ACTION" ]] || return 0'
+assert_contains "menu_option"
+assert_contains "menu_note"
+assert_contains "说明："
 assert_contains "安装与更新"
 assert_contains "配置与查看"
 assert_contains "备份与恢复"
@@ -148,6 +151,10 @@ backup_config_body="$(sed -n '/^backup_config_action()/,/^backup_action()/p' "$S
 bash -c '
 set -euo pipefail
 source <(sed "$ d" "$1")
+
+output="$(menu_option 1 "安装 Sub-Store"; menu_note "全新源码部署")"
+[[ "$output" == *$'\''\033[1m[1] 安装 Sub-Store'\''* ]] || exit 30
+[[ "$output" == *$'\''\033[2m说明：全新源码部署'\''* ]] || exit 31
 
 ASSUME_YES=1
 INTERACTIVE=0
