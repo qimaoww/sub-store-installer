@@ -131,6 +131,8 @@ assert_contains "resolve_node_bin"
 assert_contains "NODE_BIN"
 assert_contains 'ExecStart=${NODE_BIN}'
 assert_contains "safe.directory"
+assert_contains 'git -C "$dest" diff --quiet'
+assert_contains 'git -C "$dest" reset --hard "origin/${branch}"'
 assert_contains "SUB_STORE_BACKEND_UPLOAD_CRON"
 assert_contains "SUB_STORE_BACKEND_DOWNLOAD_CRON"
 assert_contains "SUB_STORE_BACKEND_SYNC_CRON"
@@ -143,6 +145,7 @@ assert_readme_contains "不会写入 README 或测试文件"
 assert_readme_contains "WebDAV 远程备份"
 assert_readme_contains "backup-config"
 assert_readme_contains '误填 `on/yes/true` 会按 `daily` 处理'
+assert_readme_contains "官方分支强制改写"
 
 backup_config_body="$(sed -n '/^backup_config_action()/,/^backup_action()/p' "$SCRIPT")"
 [[ "$backup_config_body" != *"collect_interactive_config"* ]] || fail "backup-config 不应进入完整基础配置流程"
@@ -208,6 +211,59 @@ LOCAL_BACKUP_CRON="hourly"
 normalize_config
 [[ "$LOCAL_BACKUP_CRON" == "hourly" ]] || exit 24
 ' bash "$SCRIPT" || fail "本地自动备份 OnCalendar 开关兼容逻辑验证失败"
+
+sync_test_root="$(mktemp -d)"
+trap 'rm -rf "$sync_test_root"' EXIT
+sync_origin="${sync_test_root}/origin.git"
+sync_seed="${sync_test_root}/seed"
+sync_rewrite="${sync_test_root}/rewrite"
+sync_dest="${sync_test_root}/deploy"
+sync_gitconfig="${sync_test_root}/gitconfig"
+
+git init --bare --initial-branch=master "$sync_origin" >/dev/null
+git init -b master "$sync_seed" >/dev/null
+git -C "$sync_seed" config user.name test
+git -C "$sync_seed" config user.email test@example.invalid
+printf 'version-1\n' > "${sync_seed}/version.txt"
+printf 'upstream-env-1\n' > "${sync_seed}/.env.production"
+git -C "$sync_seed" add version.txt .env.production
+git -C "$sync_seed" commit -m version-1 >/dev/null
+git -C "$sync_seed" remote add origin "$sync_origin"
+git -C "$sync_seed" push -u origin master >/dev/null
+
+GIT_CONFIG_GLOBAL="$sync_gitconfig" bash -c '
+set -euo pipefail
+source <(sed "$ d" "$1")
+sync_repo "file://$2" master "$3"
+' bash "$SCRIPT" "$sync_origin" "$sync_dest"
+
+printf 'installer-managed-env\n' > "${sync_dest}/.env.production"
+
+git init -b master "$sync_rewrite" >/dev/null
+git -C "$sync_rewrite" config user.name test
+git -C "$sync_rewrite" config user.email test@example.invalid
+printf 'version-2\n' > "${sync_rewrite}/version.txt"
+printf 'upstream-env-2\n' > "${sync_rewrite}/.env.production"
+git -C "$sync_rewrite" add version.txt .env.production
+git -C "$sync_rewrite" commit -m version-2 >/dev/null
+git -C "$sync_rewrite" push --force "$sync_origin" master >/dev/null
+
+GIT_CONFIG_GLOBAL="$sync_gitconfig" bash -c '
+set -euo pipefail
+source <(sed "$ d" "$1")
+sync_repo "file://$2" master "$3"
+' bash "$SCRIPT" "$sync_origin" "$sync_dest"
+[[ "$(<"${sync_dest}/version.txt")" == "version-2" ]] || fail "远端强推后源码未同步到新版本"
+
+printf 'local-change\n' > "${sync_dest}/version.txt"
+if GIT_CONFIG_GLOBAL="$sync_gitconfig" bash -c '
+set -euo pipefail
+source <(sed "$ d" "$1")
+sync_repo "file://$2" master "$3"
+' bash "$SCRIPT" "$sync_origin" "$sync_dest"; then
+  fail "源码存在本地修改时仍执行了同步"
+fi
+[[ "$(<"${sync_dest}/version.txt")" == "local-change" ]] || fail "源码本地修改被覆盖"
 
 while IFS= read -r file; do
   while IFS= read -r line; do

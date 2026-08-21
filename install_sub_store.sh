@@ -1131,9 +1131,13 @@ sync_repo() {
   if [[ -d "$dest/.git" ]]; then
     git config --global --add safe.directory "$dest" >/dev/null 2>&1 || true
     log "更新源码目录：${dest}"
+    if ! git -C "$dest" diff --quiet -- . ':(exclude).env.production' || \
+      ! git -C "$dest" diff --cached --quiet -- . ':(exclude).env.production'; then
+      die "${dest} 存在未提交的源码修改，已停止更新以避免覆盖；请先提交、备份或还原这些修改"
+    fi
     git -C "$dest" fetch origin "$branch" --depth=1
-    git -C "$dest" checkout "$branch" 2>/dev/null || git -C "$dest" checkout -B "$branch" "origin/${branch}"
-    git -C "$dest" pull --ff-only origin "$branch"
+    git -C "$dest" checkout -q "$branch" 2>/dev/null || git -C "$dest" checkout -q -B "$branch" "origin/${branch}"
+    git -C "$dest" reset --hard "origin/${branch}"
   else
     [[ ! -e "$dest" ]] || die "${dest} 已存在，但不是 Git 仓库；请换安装目录或手动处理该目录"
     log "克隆源码：${repo}（分支：${branch}）"

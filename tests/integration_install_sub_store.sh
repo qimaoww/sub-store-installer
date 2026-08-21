@@ -305,7 +305,7 @@ assert_contains 'upload=' "${TEST_LOG}/curl.log"
 log "测试已安装更新"
 run_installer update --non-interactive --yes --skip-deps --no-start "${COMMON_ARGS[@]}"
 assert_contains 'fetch origin master --depth=1' "${TEST_LOG}/git.log"
-assert_contains 'pull --ff-only origin master' "${TEST_LOG}/git.log"
+assert_contains 'reset --hard origin/master' "${TEST_LOG}/git.log"
 
 log "测试修改配置"
 run_installer config --non-interactive --yes --skip-deps --no-start \
